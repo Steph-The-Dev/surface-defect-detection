@@ -1,100 +1,116 @@
-import streamlit as st
 import cv2
 import numpy as np
 import pandas as pd
-from src.vision import process_image
+import streamlit as st
+
+from src.vision import AdaptiveThreshold, DefectDetectionPipeline, ManualThreshold, OtsuThreshold
 
 # Page config for a modern, wide dashboard look
 st.set_page_config(layout="wide", page_title="Industrial Vision: Defect Detector", page_icon="🔍")
 
 st.title("Industrial Vision: Surface Defect Detector")
-st.write("Upload a metal surface image to analyze defects, or adjust the parameters in the sidebar in real-time.")
+st.markdown("""
+This professional-grade tool evaluates metallic surfaces in real-time. 
+Adjust the vision parameters in the sidebar to fine-tune the detection pipeline.
+""")
 
 # --- SIDEBAR CONFIGURATION ---
 with st.sidebar:
-    st.header("⚙️ Vision Parameters")
-    st.write("Tweak the algorithm settings dynamically.")
-    
-    blur_kernel = st.slider("Blur Kernel Size", min_value=1, max_value=21, value=5, step=2, help="Higher values reduce background noise but might blur out tiny defects. Must be an odd number.")
-    
-    st.markdown("---")
-    thresh_method = st.selectbox(
-        "Thresholding Method", 
-        ["Adaptive (Local/Fine Details)", "Otsu (Automatic Global)", "Manual (Global)"],
-        index=0,
-        help="Global methods apply one threshold to the entire image. Adaptive calculates it locally, which is far better for uneven lighting and fine scratches."
-    )
-    
-    # Initialize defaults
-    thresh_val = 150
-    block_size = 11
-    c_constant = 2
-    
-    # Conditional UI based on method chosen
-    if thresh_method == "Manual (Global)":
-        thresh_val = st.slider("Manual Threshold Value", min_value=0, max_value=255, value=150, help="Pixels darker than this value will be flagged as defects.")
-        
-    elif thresh_method == "Otsu (Automatic Global)":
-        st.info("Otsu's method is active. The global threshold is determined dynamically from the histogram.")
-        
-    elif thresh_method == "Adaptive (Local/Fine Details)":
-        st.write("🔍 **Fine-Tuning Adaptive Threshold**")
-        block_size = st.slider("Block Size (Neighborhood)", min_value=3, max_value=99, value=11, step=2, help="The size of the local region used to calculate the threshold. Larger blocks ignore larger gradients.")
-        c_constant = st.slider("Constant (C)", min_value=-50, max_value=50, value=2, help="A constant subtracted from the local mean. A lower value makes it more sensitive to very faint scratches.")
+    st.header("⚙️ Pipeline Configuration")
+
+    with st.expander("🛡️ Preprocessing", expanded=True):
+        blur_kernel = st.slider(
+            "Gaussian Blur Kernel",
+            min_value=1,
+            max_value=21,
+            value=5,
+            step=2,
+            help="Higher values reduce background noise but might blur out tiny defects.",
+        )
+
+    with st.expander("🌓 Thresholding Strategy", expanded=True):
+        thresh_method = st.selectbox(
+            "Method", ["Adaptive (Local)", "Otsu (Global Auto)", "Manual (Global)"], index=0
+        )
+
+        if thresh_method == "Manual (Global)":
+            thresh_val = st.slider("Threshold Value", 0, 255, 150)
+            strategy = ManualThreshold(threshold_value=thresh_val)
+        elif thresh_method == "Otsu (Global Auto)":
+            st.info("Otsu's method determines the optimal threshold statistically.")
+            strategy = OtsuThreshold()
+        else:
+            block_size = st.slider("Neighborhood Size", 3, 99, 11, step=2)
+            c_constant = st.slider("C Constant", -50, 50, 2)
+            strategy = AdaptiveThreshold(block_size=block_size, c_constant=c_constant)
+
+    with st.expander("🧹 Post-Processing", expanded=False):
+        morph_size = st.slider(
+            "Morphology Kernel",
+            1,
+            15,
+            3,
+            step=2,
+            help="Used for noise removal (Opening) and gap filling (Closing).",
+        )
+        min_area = st.number_input("Min. Defect Area (px)", min_value=0.0, value=2.0, step=0.5)
 
 # --- MAIN CONTENT ---
-uploaded_file = st.file_uploader("Upload Image (jpg, png, jpeg)...", type=["jpg", "png", "jpeg"])
+uploaded_file = st.file_uploader(
+    "Upload Surface Image (jpg, png, jpeg)...", type=["jpg", "png", "jpeg"]
+)
 
 if uploaded_file is not None:
-    # 1. Convert image to a format OpenCV understands
+    # 1. Image Loading
     file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
-    image = cv2.imdecode(file_bytes, 1) 
-    
-    # 2. Image Processing via our new module
-    result_image, threshold_mask, defect_pct, hist_data, actual_thresh = process_image(
-        image=image, 
-        blur_kernel=blur_kernel, 
-        thresh_method=thresh_method, 
-        thresh_val=thresh_val,
-        block_size=block_size,
-        c_constant=c_constant
+    image = cv2.imdecode(file_bytes, 1)
+
+    # 2. Pipeline Execution
+    pipeline = DefectDetectionPipeline(
+        blur_kernel=blur_kernel, morph_kernel_size=morph_size, min_defect_area=min_area
     )
-    
-    # 3. Metrics Display
-    st.subheader("📊 Analysis Metrics")
-    metric_cols = st.columns(3)
-    metric_cols[0].metric("Defect Area (%)", f"{defect_pct:.2f}%", "- Anomalies Detected" if defect_pct > 0 else "Clean")
-    
-    if thresh_method == "Adaptive (Local/Fine Details)":
-        metric_cols[1].metric("Applied Threshold", "Local (Varying)", "- Adaptive", delta_color="off")
-    else:
-        metric_cols[1].metric("Applied Threshold", f"{int(actual_thresh)}", f"- {thresh_method.split()[0]}", delta_color="off")
-        
-    metric_cols[2].metric("Quality Status", "FAIL" if defect_pct > 1.0 else "PASS", delta_color="inverse")
-    
-    st.markdown("---")
 
-    # 4. Display Images
-    st.subheader("👁️ Vision Results")
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        st.image(image, channels="BGR", caption="1. Original Surface")
-    with col2:
-        st.image(threshold_mask, caption="2. Defect Mask (B/W)")
-    with col3:
-        # Convert BGR (OpenCV) to RGB (Streamlit display standard)
-        result_rgb = cv2.cvtColor(result_image, cv2.COLOR_BGR2RGB)
-        st.image(result_rgb, caption="3. Detected Anomalies (Highlighted)")
+    try:
+        results = pipeline.process(image, strategy)
 
-    # 5. Data Visualization: Histogram
-    st.markdown("---")
-    st.subheader("📈 Pixel Intensity Distribution (Histogram)")
-    st.write("This chart represents the image pixels. The X-axis is brightness (0=Black, 255=White).")
-    
-    # Convert numpy histogram to a Pandas DataFrame for Streamlit's native charting
-    chart_data = pd.DataFrame(hist_data, columns=['Frequency'])
-    st.line_chart(chart_data)
+        # 3. Metrics Display
+        st.subheader("📊 Analysis Metrics")
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Defect Area (%)", f"{results['defect_percentage']:.2f}%")
+
+        thresh_display = (
+            f"{int(results['applied_threshold'])}"
+            if results["applied_threshold"] > 0
+            else "Adaptive"
+        )
+        m2.metric("Applied Threshold", thresh_display)
+
+        m3.metric("Anomalies Detected", results["contours_found"])
+
+        status = "FAIL" if results["defect_percentage"] > 1.0 else "PASS"
+        m4.metric("Quality Status", status, delta_color="inverse" if status == "FAIL" else "normal")
+
+        st.markdown("---")
+
+        # 4. Results Visualization
+        st.subheader("👁️ Vision Pipeline Stages")
+        c1, c2, c3 = st.columns(3)
+
+        with c1:
+            st.image(image, channels="BGR", caption="1. Original Surface")
+        with c2:
+            st.image(results["threshold_mask"], caption="2. Processed Mask")
+        with c3:
+            result_rgb = cv2.cvtColor(results["result_image"], cv2.COLOR_BGR2RGB)
+            st.image(result_rgb, caption="3. Highlighted Anomalies")
+
+        # 5. Histogram
+        with st.expander("📈 Pixel Intensity Distribution"):
+            chart_data = pd.DataFrame(results["histogram"], columns=["Frequency"])
+            st.line_chart(chart_data)
+
+    except Exception as e:
+        st.error(f"Error processing image: {e}")
 
 else:
-    st.info("Please upload an image to begin testing the vision algorithm. Adjust parameters in the sidebar on the left.")
+    st.info("Awaiting image upload. Use the sidebar to configure the detection sensitivity.")

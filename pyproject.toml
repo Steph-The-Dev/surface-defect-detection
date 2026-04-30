@@ -1,0 +1,29 @@
+[project]
+name = "surface-defect-detection"
+version = "0.1.0"
+description = "Industrial Surface Defect Detection using Computer Vision"
+authors = [{ name = "Gemini CLI" }]
+requires-python = ">=3.10"
+dependencies = [
+    "streamlit>=1.30.0",
+    "opencv-python>=4.8.0",
+    "numpy>=1.24.0",
+    "pandas>=2.0.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "B", "A", "C4"]
+ignore = []
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
