@@ -23,7 +23,7 @@ format:
 	ruff format .
 
 typecheck:
-	mypy src/
+	mypy src tests app.py
 
 run:
 	streamlit run app.py

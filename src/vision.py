@@ -1,19 +1,26 @@
 from abc import ABC, abstractmethod
+from typing import Any
 
 import cv2
 import numpy as np
+from cv2.typing import MatLike
+
+# Images and masks, typed as OpenCV's own array type so cv2 return values check cleanly
+Image = MatLike
+# Grayscale histogram as returned by cv2.calcHist
+Histogram = MatLike
 
 
 class ThresholdStrategy(ABC):
     """Abstract base class for thresholding strategies (Strategy Pattern)."""
 
     @abstractmethod
-    def apply(self, image: np.ndarray) -> tuple[np.ndarray, float]:
+    def apply(self, image: Image) -> tuple[Image, float]:
         pass
 
 
 class OtsuThreshold(ThresholdStrategy):
-    def apply(self, image: np.ndarray) -> tuple[np.ndarray, float]:
+    def apply(self, image: Image) -> tuple[Image, float]:
         val, mask = cv2.threshold(image, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
         return mask, val
 
@@ -23,7 +30,7 @@ class AdaptiveThreshold(ThresholdStrategy):
         self.block_size = block_size if block_size % 2 != 0 else block_size + 1
         self.c_constant = c_constant
 
-    def apply(self, image: np.ndarray) -> tuple[np.ndarray, float]:
+    def apply(self, image: Image) -> tuple[Image, float]:
         mask = cv2.adaptiveThreshold(
             image,
             255,
@@ -39,12 +46,10 @@ class ManualThreshold(ThresholdStrategy):
     def __init__(self, threshold_value: int = 150):
         self.threshold_value = threshold_value
 
-    def apply(self, image: np.ndarray) -> tuple[np.ndarray, float]:
+    def apply(self, image: Image) -> tuple[Image, float]:
         _, mask = cv2.threshold(image, self.threshold_value, 255, cv2.THRESH_BINARY_INV)
         return mask, float(self.threshold_value)
 
-
-from typing import Any
 
 class DefectDetectionPipeline:
     """
@@ -52,12 +57,17 @@ class DefectDetectionPipeline:
     Encapsulates preprocessing, thresholding, morphological cleaning, and contour analysis.
     """
 
-    def __init__(self, blur_kernel: int = 5, morph_kernel_size: int = 3, min_defect_area: float = 2.0):
+    def __init__(
+        self,
+        blur_kernel: int = 5,
+        morph_kernel_size: int = 3,
+        min_defect_area: float = 2.0,
+    ) -> None:
         self.blur_kernel = blur_kernel if blur_kernel % 2 != 0 else blur_kernel + 1
         self.morph_kernel = np.ones((morph_kernel_size, morph_kernel_size), np.uint8)
         self.min_defect_area = min_defect_area
 
-    def process(self, image: np.ndarray, strategy: ThresholdStrategy) -> dict[str, Any]:
+    def process(self, image: Image, strategy: ThresholdStrategy) -> dict[str, Any]:
         """
         Executes the full vision pipeline on an input image.
 
@@ -105,13 +115,13 @@ class DefectDetectionPipeline:
 
 # For backward compatibility (optional but recommended during transition)
 def process_image(
-    image: np.ndarray,
+    image: Image,
     blur_kernel: int,
     thresh_method: str,
     thresh_val: int,
     block_size: int = 11,
     c_constant: int = 2,
-) -> tuple[np.ndarray, np.ndarray, float, np.ndarray, float]:
+) -> tuple[Image, Image, float, Histogram, float]:
     """Bridge function to maintain compatibility with original app.py during migration."""
     strategy: ThresholdStrategy
     if thresh_method == "Otsu (Automatic Global)":

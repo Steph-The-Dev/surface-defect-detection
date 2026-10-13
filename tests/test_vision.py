@@ -2,11 +2,17 @@ import cv2
 import numpy as np
 import pytest
 
-from src.vision import AdaptiveThreshold, DefectDetectionPipeline, ManualThreshold, OtsuThreshold
+from src.vision import (
+    AdaptiveThreshold,
+    DefectDetectionPipeline,
+    Image,
+    ManualThreshold,
+    OtsuThreshold,
+)
 
 
 @pytest.fixture
-def sample_image() -> np.ndarray:
+def sample_image() -> Image:
     """Creates a synthetic 100x100 image with a white square (defect) on a black background."""
     img = np.zeros((100, 100, 3), dtype=np.uint8)
     # Draw a "defect"
@@ -15,12 +21,12 @@ def sample_image() -> np.ndarray:
 
 
 @pytest.fixture
-def blank_image() -> np.ndarray:
+def blank_image() -> Image:
     """Creates a synthetic 100x100 white image (no defects)."""
     return np.full((100, 100, 3), 255, dtype=np.uint8)
 
 
-def test_manual_threshold_strategy(sample_image):
+def test_manual_threshold_strategy(sample_image: Image) -> None:
     strategy = ManualThreshold(threshold_value=127)
     # Gray conversion and blur happen in pipeline, but we can test strategy in isolation
     gray = cv2.cvtColor(sample_image, cv2.COLOR_BGR2GRAY)
@@ -35,7 +41,7 @@ def test_manual_threshold_strategy(sample_image):
     assert cv2.countNonZero(mask) > 0
 
 
-def test_pipeline_basic_detection(sample_image):
+def test_pipeline_basic_detection(sample_image: Image) -> None:
     pipeline = DefectDetectionPipeline(blur_kernel=3)
     strategy = ManualThreshold(threshold_value=127)
 
@@ -47,7 +53,7 @@ def test_pipeline_basic_detection(sample_image):
     assert results["threshold_mask"].shape == (100, 100)
 
 
-def test_pipeline_no_defects(blank_image):
+def test_pipeline_no_defects(blank_image: Image) -> None:
     pipeline = DefectDetectionPipeline()
     strategy = OtsuThreshold()
 
@@ -57,14 +63,14 @@ def test_pipeline_no_defects(blank_image):
     assert results["contours_found"] == 0
 
 
-def test_adaptive_threshold_params():
+def test_adaptive_threshold_params() -> None:
     strategy = AdaptiveThreshold(block_size=10, c_constant=5)
     # Block size should be coerced to odd
     assert strategy.block_size == 11
     assert strategy.c_constant == 5
 
 
-def test_morphological_cleaning(sample_image):
+def test_morphological_cleaning(sample_image: Image) -> None:
     # Add some noise to the sample image
     noisy_img = sample_image.copy()
     noisy_img[10, 10] = (255, 255, 255)  # Single pixel noise

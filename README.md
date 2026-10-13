@@ -2,7 +2,7 @@
 
 [![Code style: ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![Checked with mypy](https://img.shields.io/badge/mypy-checked-blue.svg)](http://mypy-lang.org/)
-[![Tests](https://img.shields.io/badge/tests-passing-brightgreen.svg)](https://pytest.org/)
+[![CI](https://github.com/Steph-The-Dev/surface-defect-detection/actions/workflows/ci.yml/badge.svg)](https://github.com/Steph-The-Dev/surface-defect-detection/actions/workflows/ci.yml)
 
 ## 🎯 Overview
 This project leverages a background in visual signal processing to build an automated, interactive quality inspection tool. It evaluates metallic surfaces in real-time, detecting anomalies like fine scratches and dents using a combination of classical Computer Vision and modern software engineering patterns.

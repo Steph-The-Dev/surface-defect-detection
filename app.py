@@ -3,7 +3,13 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-from src.vision import AdaptiveThreshold, DefectDetectionPipeline, ManualThreshold, OtsuThreshold
+from src.vision import (
+    AdaptiveThreshold,
+    DefectDetectionPipeline,
+    ManualThreshold,
+    OtsuThreshold,
+    ThresholdStrategy,
+)
 
 # Page config for a modern, wide dashboard look
 st.set_page_config(layout="wide", page_title="Industrial Vision: Defect Detector", page_icon="🔍")
@@ -33,6 +39,7 @@ with st.sidebar:
             "Method", ["Adaptive (Local)", "Otsu (Global Auto)", "Manual (Global)"], index=0
         )
 
+        strategy: ThresholdStrategy
         if thresh_method == "Manual (Global)":
             thresh_val = st.slider("Threshold Value", 0, 255, 150)
             strategy = ManualThreshold(threshold_value=thresh_val)
@@ -64,6 +71,9 @@ if uploaded_file is not None:
     # 1. Image Loading
     file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
     image = cv2.imdecode(file_bytes, 1)
+    if image is None:
+        st.error("The uploaded file could not be decoded as an image.")
+        st.stop()
 
     # 2. Pipeline Execution
     pipeline = DefectDetectionPipeline(
